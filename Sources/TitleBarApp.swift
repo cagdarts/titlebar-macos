@@ -374,6 +374,10 @@ final class TitleManager: ObservableObject {
                 guard let pid = info[kCGWindowOwnerPID as String] as? pid_t,
                       let wid = info[kCGWindowNumber as String] as? UInt32,
                       let layer = info[kCGWindowLayer as String] as? Int, layer == 0 else { continue }
+                // Skip tiny helper windows (toolbars, find bars, tab strips) that browsers keep alive
+                if let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+                   let bounds = CGRect(dictionaryRepresentation: boundsDict),
+                   bounds.width < 100 || bounds.height < 100 { continue }
                 let name = info[kCGWindowName as String] as? String
                 cgWindows.append((id: wid, pid: pid, name: name))
             }
@@ -401,6 +405,12 @@ final class TitleManager: ObservableObject {
                   let axWindows = windowsRef as? [AXUIElement] else { continue }
 
             for axWindow in axWindows {
+                // Skip popups like browser "Find in page" bars — only list real document windows
+                var subroleRef: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(axWindow, kAXSubroleAttribute as CFString, &subroleRef) == .success,
+                      let subrole = subroleRef as? String,
+                      subrole == kAXStandardWindowSubrole as String else { continue }
+
                 var titleRef: CFTypeRef?
                 if AXUIElementCopyAttributeValue(axWindow, kAXTitleAttribute as CFString, &titleRef) == .success,
                    let title = titleRef as? String, !title.isEmpty {
